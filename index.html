@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日報</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:16px;background:#f5f6f8;color:#222}
+  h1{font-size:18px;margin:0 0 8px}
+  label{display:block;font-size:13px;color:#555;margin:14px 0 4px}
+  input,textarea,button{font:inherit;width:100%;box-sizing:border-box;border:1px solid #ccc;border-radius:8px;padding:10px;background:#fff}
+  textarea{min-height:40vh;resize:vertical;line-height:1.5}
+  button{margin-top:16px;background:#06c755;color:#fff;border:0;font-weight:bold;padding:14px}
+  button:disabled{opacity:.5}
+  #msg{margin-top:10px;font-size:14px;min-height:1.2em}
+  #draft{font-size:12px;color:#888;font-weight:normal}
+  .r{background:#fff;border-radius:8px;padding:10px;margin-top:8px;white-space:pre-wrap;font-size:14px;line-height:1.5}
+  .r small{color:#777;display:block;margin-bottom:4px}
+</style>
+</head>
+<body>
+<h1>日報</h1>
+<label>対象日</label>
+<input type="date" id="date">
+<label>本文 <span id="draft"></span></label>
+<textarea id="text" placeholder="今日の日報"></textarea>
+<button id="send" disabled>送信</button>
+<div id="msg"></div>
+
+<h1 style="margin-top:28px">自分の過去の日報</h1>
+<div id="list">読み込み中…</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+const LIFF_ID = '2012053846-4NX6k2ix';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzGtb3O0f9RvOnp26bN9CqMrhOajH41qkLN-9mJShhecQP1CKy-bWHygY5lOHrWJHXgEQ/exec';
+const $ = id => document.getElementById(id);
+const KEY = 'nippo-draft';
+const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+let token, reports = [];
+
+// GASへはtext/plainでPOST（CORSのプリフライトを避ける）
+async function api(payload) {
+  const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+  const j = await res.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+
+// 下書き: 入力のたびに端末に保存、送信で消す
+try {
+  const d = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (d && d.text) { $('date').value = d.date; $('text').value = d.text; $('draft').textContent = '（下書きを復元）'; }
+} catch (e) {}
+if (!$('date').value) $('date').value = today();
+['date', 'text'].forEach(id => $(id).addEventListener('input', () => {
+  try { localStorage.setItem(KEY, JSON.stringify({ date: $('date').value, text: $('text').value })); } catch (e) {}
+  $('draft').textContent = '（下書き保存済み）';
+}));
+
+liff.init({ liffId: LIFF_ID }).then(() => {
+  if (!liff.isLoggedIn()) return liff.login();
+  token = liff.getIDToken();
+  $('send').disabled = false;
+  load();
+}).catch(e => { $('msg').textContent = 'LINEの読み込みに失敗: ' + e; });
+
+function load() {
+  api({ action: 'list', idToken: token }).then(j => { reports = j.reports; render(); }).catch(fail);
+}
+function render() {
+  $('list').textContent = reports.length ? '' : 'まだありません';
+  reports.forEach(r => {
+    const d = document.createElement('div'); d.className = 'r';
+    const s = document.createElement('small'); s.textContent = r.date + '（送信 ' + r.sentAt + '）';
+    d.append(s, document.createTextNode(r.text));
+    $('list').append(d);
+  });
+}
+$('send').onclick = () => send(false);
+function send(overwrite) {
+  const date = $('date').value, text = $('text').value.trim();
+  if (!date || !text) { $('msg').textContent = '日付と本文を入れてください'; return; }
+  $('send').disabled = true; $('msg').textContent = '送信中…';
+  api({ action: 'save', idToken: token, date, text, overwrite }).then(res => {
+    $('send').disabled = false;
+    if (res.dup) {
+      if (confirm(date + ' の日報はすでに送信済みです。上書きしますか？')) return send(true);
+      $('msg').textContent = ''; return;
+    }
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    $('text').value = ''; $('draft').textContent = ''; $('msg').textContent = '送信しました';
+    load();
+  }).catch(fail);
+}
+function fail(e) { $('send').disabled = false; $('msg').textContent = 'エラー: ' + (e.message || e); }
+</script>
+</body>
+</html>
