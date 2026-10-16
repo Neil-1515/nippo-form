@@ -143,3 +143,19 @@ function test_targetDate() {
   eq(targetDate('12/31\n年末の分', sent), '2025/12/31');
   Logger.log('ok');
 }
+
+// 1回だけエディタから実行: トーク下部に「日報を書く」ボタン（リッチメニュー）を全員に設定
+function setupRichMenu() {
+  const liffUrl = 'https://liff.line.me/2012053846-4NX6k2ix';
+  const imgUrl = 'https://neil-1515.github.io/nippo-form/richmenu.png'; // 2500x843 PNG
+  const h = { Authorization: 'Bearer ' + TOKEN };
+  const menu = {
+    size: { width: 2500, height: 843 }, selected: true, name: '日報', chatBarText: '日報を書く',
+    areas: [{ bounds: { x: 0, y: 0, width: 2500, height: 843 }, action: { type: 'uri', uri: liffUrl } }],
+  };
+  const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/richmenu', { method: 'post', contentType: 'application/json', headers: h, payload: JSON.stringify(menu) });
+  const id = JSON.parse(res.getContentText()).richMenuId;
+  UrlFetchApp.fetch(`https://api-data.line.me/v2/bot/richmenu/${id}/content`, { method: 'post', contentType: 'image/png', headers: h, payload: UrlFetchApp.fetch(imgUrl).getBlob().getBytes() });
+  UrlFetchApp.fetch(`https://api.line.me/v2/bot/user/all/richmenu/${id}`, { method: 'post', headers: h });
+  Logger.log('richMenuId=' + id);
+}
