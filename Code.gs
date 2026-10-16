@@ -41,7 +41,8 @@ function verify(idToken) {
 
 function myReports(idToken) {
   const { uid } = verify(idToken);
-  return rowsOf(uid).map(r => ({ date: fmt(r[3], 'yyyy-MM-dd'), sentAt: fmt(r[2], 'MM/dd HH:mm'), text: r[4] })).reverse();
+  return rowsOf(uid).sort((a, b) => b[2] - a[2]) // 送信の新しい順
+    .map(r => ({ date: fmt(r[3], 'yyyy-MM-dd'), sentAt: fmt(r[2], 'MM/dd HH:mm'), text: r[4] }));
 }
 
 function saveReport(idToken, date, text, overwrite) {

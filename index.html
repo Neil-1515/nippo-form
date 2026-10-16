@@ -16,6 +16,11 @@
   #draft{font-size:12px;color:#888;font-weight:normal}
   .r{background:#fff;border-radius:8px;padding:10px;margin-top:8px;white-space:pre-wrap;font-size:14px;line-height:1.5}
   .r small{color:#777;display:block;margin-bottom:4px}
+  dialog{border:0;border-radius:12px;padding:20px;width:80vw;max-width:360px;font-size:15px;line-height:1.6}
+  dialog::backdrop{background:rgba(0,0,0,.4)}
+  .row{display:flex;gap:8px}
+  .row button{margin-top:12px;padding:12px}
+  .ghost{background:#eee;color:#222}
 </style>
 </head>
 <body>
@@ -26,6 +31,9 @@
 <textarea id="text" placeholder="今日の日報"></textarea>
 <button id="send" disabled>送信</button>
 <div id="msg"></div>
+<dialog id="dup"><p id="dupMsg" style="margin:0"></p>
+  <div class="row"><button type="button" id="dupNo" class="ghost">キャンセル</button><button type="button" id="dupYes">上書き</button></div>
+</dialog>
 
 <h1 style="margin-top:28px">自分の過去の日報</h1>
 <div id="list">読み込み中…</div>
@@ -78,15 +86,18 @@ function render() {
   });
 }
 $('send').onclick = () => send(false);
+$('dupYes').onclick = () => { $('dup').close(); send(true); };
+$('dupNo').onclick = () => $('dup').close();
 function send(overwrite) {
   const date = $('date').value, text = $('text').value.trim();
   if (!date || !text) { $('msg').textContent = '日付と本文を入れてください'; return; }
   $('send').disabled = true; $('msg').textContent = '送信中…';
   api({ action: 'save', idToken: token, date, text, overwrite }).then(res => {
     $('send').disabled = false;
-    if (res.dup) {
-      if (confirm(date + ' の日報はすでに送信済みです。上書きしますか？')) return send(true);
-      $('msg').textContent = ''; return;
+    if (res.dup) { // ページ内の確認窓（ブラウザ標準のconfirmはドメイン名が出る）
+      $('msg').textContent = '';
+      $('dupMsg').textContent = date + ' の日報はすでに送信済みです。上書きしますか？';
+      $('dup').showModal(); return;
     }
     try { localStorage.removeItem(KEY); } catch (e) {}
     $('text').value = ''; $('draft').textContent = ''; $('msg').textContent = '送信しました';
